@@ -1,0 +1,10 @@
+{
+  "name": "autojs6-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript for AutoJs6's Rhino runtime — a clean starter, a catalog of engine gotchas with runnable broken examples, and a real-Rhino verification toolkit that tracks whatever fork/build you point it at.",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

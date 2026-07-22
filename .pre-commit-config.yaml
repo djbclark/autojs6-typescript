@@ -1,0 +1,108 @@
+---
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        args: [tools/]
+        language: system
+        pass_filenames: false
+        files: '\.py$'
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.48.0
+    hooks:
+      - id: typos
+
+  - repo: local
+    hooks:
+      - id: ts-compile
+        name: TypeScript compile + build check
+        entry: bash
+        args:
+          - -c
+          - |
+            set -euo pipefail
+            just build
+            dirty=$(
+              {
+                git diff --name-only -- src examples types
+                git status --porcelain --untracked-files=normal -- src examples types | grep '^??' | cut -c4-
+              } | sort -u | grep -E '\.js$' || true
+            )
+            if [ -n "$dirty" ]; then
+              echo "error: TypeScript build produced unstaged changes:"
+              echo "$dirty" | sed 's/^/  /'
+              echo "Review these files, 'git add' them, then commit again."
+              exit 1
+            fi
+        language: system
+        files: '\.ts$'
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: biome check
+        entry: biome
+        args: [check, --no-errors-on-unmatched]
+        language: system
+        files: '^(src|examples|types)/.*\.(js|ts)$'
+
+  - repo: local
+    hooks:
+      - id: just-fmt
+        name: justfile format
+        entry: bash
+        args: ["-c", "just --fmt --check"]
+        language: system
+        files: "^justfile$"
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: prettier
+        args: ["--check"]
+        language: system
+        files: '\.md$'
+
+  - repo: local
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        entry: markdownlint
+        args: ["--config", ".markdownlint.json"]
+        language: system
+        files: '\.md$'
+
+  - repo: local
+    hooks:
+      - id: rhino-syntax-guard
+        name: Rhino gotcha static checks (clean + all broken examples)
+        entry: bash
+        args:
+          - -c
+          - "just build && python3 tools/check_require_bindings.py examples/clean"
+        language: system
+        files: '^(src|examples/clean|types)/.*\.ts$'
+        pass_filenames: false
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9
+    hooks:
+      - id: bandit
+        args: ["-ll"]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

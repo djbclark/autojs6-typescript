@@ -1,0 +1,9 @@
+[files]
+extend-exclude = ["node_modules"]
+
+[default.extend-words]
+autojs = "autojs"
+jvm = "jvm"
+rhino = "rhino"
+shizuku = "shizuku"
+toybox = "toybox"

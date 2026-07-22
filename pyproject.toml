@@ -1,0 +1,23 @@
+[project]
+name = "autojs6-typescript"
+version = "0.1.0"
+description = "TypeScript for AutoJs6's Rhino runtime — gotchas, examples, and a verification toolkit"
+requires-python = ">=3.9"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true

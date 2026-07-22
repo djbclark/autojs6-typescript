@@ -1,0 +1,6 @@
+node_modules/
+*.js.map
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
