@@ -13,10 +13,28 @@ dependency. The moment both load in the same run, the whole script crashes.
 
 ## What's actually broken
 
-AutoJs6's `jvm-npm.js` require() shim does not give each required file its
-own isolated top-level scope the way Node's module system does. This is
-independent of `const`/`let`/`var`, independent of which file is the entry
-script, and 100% reproducible on a real device — confirmed during
+**Confirmed root cause: this is AutoJs6's own change, not an upstream
+jvm-npm limitation.** AutoJs6's `jvm-npm.js` is a fork of
+[nodyn/jvm-npm](https://github.com/nodyn/jvm-npm). Upstream's `Module._load`
+(which loads every successfully-resolved file) always wraps the file's source
+in `new Function(exports, module, require, __filename, __dirname, body)` —
+genuine, JS-spec-guaranteed, function-local variable scoping; two modules'
+top-level `const`s can never collide, by basic JS semantics, full stop.
+
+AutoJs6's rewrite deleted that wrapper and replaced it with
+`_load(file) { return NativeRequire.require(file); }` — delegating to
+whatever `require` AutoJs6 had already installed (its own
+`org.mozilla.javascript.commonjs.module.Require`, a Scriptable-scope /
+prototype-chain-based mechanism, not function-local scoping). Checked
+upstream's own source directly: `NativeRequire.require` there is used in
+exactly one place — a not-found/native-module fallback inside `Require()`,
+**never** as a substitute for `Module._load`'s isolation. There's no design
+ambiguity here for jvm-npm's maintainers to weigh in on; this was entirely
+AutoJs6's own architectural change. Reported:
+[SuperMonster003/AutoJs6#564](https://github.com/SuperMonster003/AutoJs6/issues/564).
+
+This is independent of `const`/`let`/`var`, independent of which file is the
+entry script, and 100% reproducible on a real device — confirmed during
 [stayturgid#34](https://github.com/djbclark/stayturgid/issues/34), where
 nearly every module in a real multi-file project used the same local names
 for `log`, `config`, `notify`, `termux`, `comonitor`, `repair` — hitting

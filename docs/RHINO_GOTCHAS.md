@@ -26,16 +26,27 @@ what's mechanically catchable (see below); the rest need code review.
 TypeError: redeclaration of var log. (file:///android_asset/modules/jvm-npm.js#67)
 ```
 
-**Mechanism:** AutoJs6's `jvm-npm.js` require() shim does not give each
-required file its own isolated top-level scope the way Node's module system
-does. If two files — anywhere in the transitive require graph reachable
-from your entry script, not just direct siblings — each declare a top-level
-binding with the same name for a shared dependency (`const log =
-require("./log.js")` in two different files, say), the _second_ one to
-load crashes the whole script. This reproduces with a minimal repro
-independent of any specific project's code (`examples/broken/01-redeclaration/`),
-is independent of `const`/`let`/`var`, and is independent of which file is
-the entry script.
+**Mechanism:** confirmed root cause — AutoJs6's `jvm-npm.js` (a fork of
+[nodyn/jvm-npm](https://github.com/nodyn/jvm-npm)) rewrote `Module._load` to
+drop upstream's `new Function(exports, module, require, __filename,
+__dirname, body)` per-module isolation wrapper (genuine, JS-spec-guaranteed
+function-local scoping — two modules' top-level `const`s can never collide,
+full stop) in favor of delegating to `NativeRequire.require(file)` — AutoJs6's
+own installed `org.mozilla.javascript.commonjs.module.Require`, a
+Scriptable-scope/prototype-chain-based mechanism, not function-local scoping.
+Checked upstream's own source directly: `NativeRequire.require` there is used
+in exactly one place — a not-found/native-module fallback inside `Require()`,
+never as a substitute for `Module._load`'s isolation. This is entirely
+AutoJs6's own change, not an upstream jvm-npm limitation or design ambiguity.
+Reported: [SuperMonster003/AutoJs6#564](https://github.com/SuperMonster003/AutoJs6/issues/564).
+
+If two files — anywhere in the transitive require graph reachable from your
+entry script, not just direct siblings — each declare a top-level binding
+with the same name for a shared dependency (`const log = require("./log.js")`
+in two different files, say), the _second_ one to load crashes the whole
+script. This reproduces with a minimal repro independent of any specific
+project's code (`examples/broken/01-redeclaration/`), is independent of
+`const`/`let`/`var`, and is independent of which file is the entry script.
 
 Because nearly any real project logs from more than one file, and shares
 config/notify/whatever-else across modules, this tends to hit **every**
@@ -43,15 +54,20 @@ commonly-shared module name, not just one.
 
 **Fix:** give every file's local binding a name unique across the **whole**
 require graph — `guardLog`, `watchdogConfig`, `comonitorNotify`, not `log`/
-`config`/`notify` everywhere.
+`config`/`notify` everywhere. This is a workaround, not a real fix — the
+actual fix (restoring `Module._load`'s Function-wrapper isolation, or
+otherwise verifying the delegation path isolates `const`/`let` correctly) is
+AutoJs6's to make; see the issue above.
 
 **Caught by:** `tools/check_require_bindings.py` (`just lint-rhino`) —
 statically, no jar or device needed. Asserts every top-level `require()`
 local binding name is globally unique across your compiled output. This
 specific gotcha is _not_ reproducible via `tools/rhino_check.py`/a bare
 Rhino shell — see `examples/broken/01-redeclaration/README.md` for the
-investigation into why (it traces into AutoJs6's own Kotlin-side
-`RequireBuilder`/`ScriptRuntime` wiring, not just the jar's CLI behavior).
+investigation into why (several plausible configurations mimicking AutoJs6's
+Kotlin-side `RequireBuilder`/`ScriptRuntime` wiring didn't reproduce it
+standalone, even once the root cause above was identified — some detail of
+the real on-device wiring still isn't replicated by a bare CLI harness).
 
 ## 2. The entry script can't carry tsc's CommonJS `exports` stamp
 
